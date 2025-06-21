@@ -7,14 +7,12 @@ on:
     paths: package.json
 
 env:
-  packageName: "dev.sleightly.template"
-  packagePath: "Packages/dev.sleightly.template"
-  packageFileName: "JS-Template"
-  packageReleaseName: "VPM Package Template"
+  icon_path: .github/thumbnail.png
   triggerRepoUpdate: ${{ false }}
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   build:
@@ -24,77 +22,78 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
     
-      - name: Get Version
-        id: version
-        uses: zoexx/github-action-json-file-properties@b9f36ce6ee6fe2680cd3c32b2c62e22eade7e590
-        with: 
-            file_path: "./package.json"
-            prop_path: "version"
-      
-      - name: Generate Tag
-        id: tag
-        run: echo prop="v${{ steps.version.outputs.value }}" >> $GITHUB_OUTPUT
+      - name: Get Package Info
+        id: package-info
+        run: |
+          echo "name=$(jq -r '.name' package.json)" >> $GITHUB_OUTPUT
+          echo "version=$(jq -r '.version' package.json)" >> $GITHUB_OUTPUT
+          echo "is_prerelease=$([[ "$(jq -r '.version' package.json)" =~ ^[0-9]+\.[0-9]+\.[0-9]+-(.+)$ ]] && echo true || echo false)" >> $GITHUB_OUTPUT
 
-      - name: Check If Release Tag Exists
-        id: checkReleaseTag
-        uses: mukunku/tag-exists-action@v1.2.0
+      - name: Cancel Workflow if Version is 0.0.0
+        if: steps.package-info.outputs.version == '0.0.0'
+        uses: actions/github-script@v7
         with:
-          tag: ${{ steps.tag.outputs.prop }}
-    
+          script: |
+            core.notice('Version is 0.0.0, requesting workflow cancellation...');
+            await github.rest.actions.cancelWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.runId
+            });
+            core.info('Waiting for cancellation to take effect...');
+            await new Promise(resolve => setTimeout(resolve, 5000));
+
       - name: Set Environment Variables
-        if: ${{ steps.checkReleaseTag.outputs.exists == 'false' }}
         run: |
-          echo "zipFile=${{ env.packageFileName }}_v${{ steps.version.outputs.value }}".zip >> $GITHUB_ENV
-          echo "unityPackage=${{ env.packageFileName }}_v${{ steps.version.outputs.value }}.unitypackage" >> $GITHUB_ENV
+          echo "zipFile=${{ steps.package-info.outputs.name }}_v${{ steps.package-info.outputs.version }}".zip >> $GITHUB_ENV
+          echo "unityPackage=${{ steps.package-info.outputs.name }}_v${{ steps.package-info.outputs.version }}.unitypackage" >> $GITHUB_ENV
+        
+      - name: Create Package Zip
+        run: zip -x '.git/*' '.github/*' -r "/tmp/${{ env.zipFile }}" .
 
-      - name: Create directory and move files
-        if: ${{ steps.checkReleaseTag.outputs.exists == 'false' }}
-        run: |
-          mkdir -p ${{env.packagePath}}
-          rsync -r --exclude="${{ env.packagePath }}" ./ "${{ env.packagePath }}"/
-        
-      - name: Create Zip
-        if: ${{ steps.checkReleaseTag.outputs.exists == 'false' }}
-        uses: thedoctor0/zip-release@09336613be18a8208dfa66bd57efafd9e2685657
-        with:
-          type: "zip"
-          directory: "${{env.packagePath}}/"
-          filename: "../../${{env.zipFile}}" # make the zip file two directories up, since we start two directories in above
-          exclusions: "*.git* *.github* .gitignore Packages/"
-          
-      - run: find "${{env.packagePath}}" -name \*.meta >> metaList
-        if: ${{ steps.checkReleaseTag.outputs.exists == 'false' }}
-          
       - name: Create UnityPackage
-        if: ${{ steps.checkReleaseTag.outputs.exists == 'false' }}
-        uses: pCYSl5EDgo/create-unitypackage@cfcd3cf0391a5ef1306342794866a9897c32af0b
+        uses: foxscore/make-unitypackage@cbd3def23d6c9910b56e726b193c2363e5ca6adc
         with:
-          package-path: ${{ env.unityPackage }}
-          include-files: metaList
-          
-      - name: Add Icon to UnityPackage
-        if: ${{ steps.checkReleaseTag.outputs.exists == 'false' }}
-        uses: foxscore/add-icon-to-unitypackage@v1
+          path: .
+          saveTo: /tmp/${{ env.unityPackage }}
+          prefix: Packages/${{ steps.package-info.outputs.name }}/
+          icon: ${{ env.icon_path }}
+
+      - name: Create Tag
+        uses: actions/github-script@v7
         with:
-          package_path: ${{ env.unityPackage }}
-          icon_path: '.github/thumbnail.png'
-          package_not_found_behavior: 'warn'
-          icon_not_found_behavior: 'warn'
-          icon_already_present_behavior: 'warn'
-        
+          script: |
+            const tagName = `v${{ steps.package-info.outputs.version }}`;
+            try {
+              await github.rest.git.createRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: `refs/tags/${tagName}`,
+                sha: context.sha
+              });
+              core.info(`Successfully created tag: ${tagName}`);
+            } catch (error) {
+              if (error.status === 422 && error.message.includes('Reference already exists')) {
+                core.setFailed(`Tag ${tagName} already exists`);
+              } else {
+                core.setFailed(`Failed to create tag: ${error.message}`);
+                throw error;
+              }
+            }
+
       - name: Make Release
-        if: ${{ steps.checkReleaseTag.outputs.exists == 'false' }}
         uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844
         with:
-          name: "${{ env.packageReleaseName }} v${{ steps.version.outputs.value }}"
-          tag_name: "v${{ steps.version.outputs.value }}"
+          name: "${{ steps.package-info.outputs.version }}"
+          tag_name: "v${{ steps.package-info.outputs.version }}"
           files: |
-            ${{ env.zipFile }}
-            ${{ env.unityPackage }}
-            ./package.json
+            /tmp/${{ env.zipFile }}
+            /tmp/${{ env.unityPackage }}
+            package.json
+          prerelease: ${{ steps.package-info.outputs.is_prerelease }}
 
       - name: Trigger VPM Repo Listing Update
-        if: ${{ env.triggerRepoUpdate == 'true' && steps.checkReleaseTag.outputs.exists == 'false'}}
+        if: ${{ env.triggerRepoUpdate == 'true' }}
         uses: peter-evans/repository-dispatch@v2
         with:
           event-type: trigger-repo-update

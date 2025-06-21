@@ -4,13 +4,14 @@
 
 A stripped down version of the official VRChat [VPM Package Template](https://github.com/vrchat-community/template-package) that excludes all of the extra website/project bloat.
 
-This is modified from [Dreadrith's template](https://github.com/Dreadrith/Listed-VPM-Template) to support a slightly different workflow, with inspiration from [bd_](https://github.com/bdunderscore/modular-avatar) and [Razgriz](https://github.com/rrazgriz/RATS).
+This is modified from [Dreadrith's template](https://github.com/Dreadrith/Listed-VPM-Template) to support a slightly different workflow, with inspiration from [bd_](https://github.com/bdunderscore/modular-avatar) and [Razgriz](https://github.com/rrazgriz/RATS), and help from [Fox_score](https://github.com/foxscore).
 
 ## Features
 
 - Can clone multiple VPM package templates into one Unity project
 - Automatically builds a GitHub release with a `.unitypackage`, `.zip`, and `package.json` upon pushing a commit to the `package.json` only if there is no existing release tag for the pushed version number when `package.json` is updated
-- Automatically adds an icon to the `.unitypackage` that is displayed when imported
+- Automatically tag GitHub releases as `pre-release` when version is hyphenated
+- Can automatically add an icon to the `.unitypackage` that is displayed when imported
 - Can automatically trigger an update/action to an external repository like a [VPM Package Listing](https://github.com/JustSleightly/VPM-Package-Listing-Template)
 
 ## Instructions
@@ -21,11 +22,8 @@ This is modified from [Dreadrith's template](https://github.com/Dreadrith/Listed
 3. Modify the cloned files for your new package
     - Replace or remove `.github/thumbnail.png` with your own `.unitypackage` import thumbnail
     - Edit `.github/workflows/release.yml`
-        - Line 10 (packageName in [Unity official name](https://docs.unity3d.com/Manual/cus-naming.html) format)
-        - Line 11 (Packages/packageName)
-        - Line 12 (Example: JS-Templatev1.0.0.unitypackage)
-        - Line 13 (Example: VPM Package Template v1.0.0)
-        - Line 14 (Read [Trigger Repo Update](https://github.com/JustSleightly/VPM-Package-Template#trigger-repo-update) section below)
+        - Line 10 (Remove `.github/thumbnail.png` if you don't want an import thumbnail)
+        - Line 11 (Read [Trigger Repo Update](https://github.com/JustSleightly/VPM-Package-Template#trigger-repo-update) section below)
     - Edit `.github/workflows/trigger-repo-update.yml`
         - Read [Trigger Repo Update](https://github.com/JustSleightly/VPM-Package-Template#trigger-repo-update) section below
     - Rename and Edit `Documentation~/dev.sleightly.template.md` if used
@@ -53,7 +51,7 @@ If you have a [VPM Package Listing](https://github.com/JustSleightly/VPM-Package
     - Line 16 (File name of target workflow to trigger)
     - Line 17 (Replace `VPM_TOKEN` with name of [Personal Access Token](https://github.com/JustSleightly/VPM-Package-Template#setting-a-personal-access-token) secret added to this repository)
 2. Edit `.github/workflows/release.yml`
-    - Line 14 (Set to `true` in order for the automatic build to trigger `.github/workflows/trigger-repo-update.yml`)
+    - Line 11 (Set to `true` in order for the automatic build to trigger `.github/workflows/trigger-repo-update.yml`)
 
 ### Setting a Personal Access Token
 
